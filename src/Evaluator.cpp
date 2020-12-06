@@ -5,30 +5,32 @@
 
 namespace tfhello
 {
-    /*
-    void Evaluator::add(LweSample *carry, LweSample *result, const LweSample *a, const LweSample *b, int begin, int end)
+    void Evaluator::addRange(LweSample *sum, LweSample *carry, const LweSample *a, const LweSample *b, int begin, int end)
     {
         LweSample *temp1 = new_gate_bootstrapping_ciphertext(bk_->params);
         LweSample *temp2 = new_gate_bootstrapping_ciphertext(bk_->params);
-        // LweSample *carry = new_gate_bootstrapping_ciphertext(bk_->params);
-        // bootsCONSTANT(carry, 0, bk_);
+        bootsCONSTANT(carry, 0, bk_);
         for (int i = begin; i < end; ++i)
         {
             bootsXOR(temp1, &a[i], &b[i], bk_);
-            bootsXOR(&result[i], temp1, carry, bk_);
+            bootsXOR(&sum[i], temp1, carry, bk_);
             bootsAND(temp2, carry, temp1, bk_);
             bootsAND(temp1, &a[i], &b[i], bk_);
             bootsOR(carry, temp1, temp2, bk_);
         }
-        // delete_gate_bootstrapping_ciphertext(carry);
         delete_gate_bootstrapping_ciphertext(temp1);
         delete_gate_bootstrapping_ciphertext(temp2);
     }
-    */
 
-    void Evaluator::add(CtxtInteger &result, const CtxtInteger &a, const CtxtInteger &b)
+    void Evaluator::add(CtxtInteger &sum, const CtxtInteger &a, const CtxtInteger &b)
     {
         assert(a.size() == b.size());
+        assert(sum.size() == a.size());
+        LweSample *carry = new_gate_bootstrapping_ciphertext(sum.param());
+        addRange(sum[0], carry, a[0], b[0], 0, a.size());
+        delete_gate_bootstrapping_ciphertext(carry);
+
+        /*
         LweSample *temp1 = new_gate_bootstrapping_ciphertext(result.param());
         LweSample *temp2 = new_gate_bootstrapping_ciphertext(result.param());
         LweSample *carry = new_gate_bootstrapping_ciphertext(result.param());
@@ -44,18 +46,20 @@ namespace tfhello
         delete_gate_bootstrapping_ciphertext(carry);
         delete_gate_bootstrapping_ciphertext(temp1);
         delete_gate_bootstrapping_ciphertext(temp2);
+        */
     }
-    void Evaluator::sub(CtxtInteger &result, const CtxtInteger &a, const CtxtInteger &b)
+    void Evaluator::sub(CtxtInteger &difference, const CtxtInteger &a, const CtxtInteger &b)
     {
         assert(a.size() == b.size());
-        LweSample *temp1 = new_gate_bootstrapping_ciphertext(result.param());
-        LweSample *temp2 = new_gate_bootstrapping_ciphertext(result.param());
-        LweSample *carry = new_gate_bootstrapping_ciphertext(result.param());
+        assert(a.size() == difference.size());
+        LweSample *temp1 = new_gate_bootstrapping_ciphertext(difference.param());
+        LweSample *temp2 = new_gate_bootstrapping_ciphertext(difference.param());
+        LweSample *carry = new_gate_bootstrapping_ciphertext(difference.param());
         bootsCONSTANT(carry, 0, bk_);
         for (int i = 0; i < a.size(); ++i)
         {
             bootsXOR(temp1, b[i], carry, bk_);
-            bootsXOR(result[i], temp1, a[i], bk_);
+            bootsXOR(difference[i], temp1, a[i], bk_);
             bootsANDNY(temp2, a[i], temp1, bk_);
             bootsAND(temp1, b[i], carry, bk_);
             bootsOR(carry, temp1, temp2, bk_);
@@ -81,48 +85,55 @@ namespace tfhello
         }
     }
 
-    void Evaluator::mul(CtxtInteger &result, const CtxtInteger &a, const CtxtInteger &b)
+    /**
+     * https://www.cnblogs.com/lfri/p/10046360.html
+     **/
+    void Evaluator::mul(CtxtInteger &product, const CtxtInteger &multiplicand, const CtxtInteger &multiplier)
     {
-        /*
-        assert(a.size() == b.size());
-        LweSample *product = new_gate_bootstrapping_ciphertext_array(2 * a.size(), a.param());
-        LweSample *temp_product = new_gate_bootstrapping_ciphertext_array(2 * a.size(), a.param());
-
-        for (int i = 0; i < 2 * a.size(); ++i)
+        assert(multiplicand.size() == multiplier.size());
+        assert(product.size() == multiplicand.size());
+        const int length = multiplicand.size();
+        for (int i = 0; i < length; ++i)
         {
-            bootsCONSTANT(&product[i], 0, bk_);
+            bootsCONSTANT(product[i], 0, bk_);
         }
 
-        LweSample *carry = new_gate_bootstrapping_ciphertext(result.param());
+        LweSample *carry = new_gate_bootstrapping_ciphertext(product.param());
+        LweSample *a = new_gate_bootstrapping_ciphertext(product.param());
+        LweSample *a_xor_b = new_gate_bootstrapping_ciphertext(product.param());
+        LweSample *a_and_b = new_gate_bootstrapping_ciphertext(product.param());
+        LweSample *a_xor_b_and_c = new_gate_bootstrapping_ciphertext(product.param());
 
-        LweSample *temp1 = new_gate_bootstrapping_ciphertext(result.param());
-        LweSample *temp2 = new_gate_bootstrapping_ciphertext(result.param());
-        LweSample *temp3 = new_gate_bootstrapping_ciphertext(result.param());
-        LweSample *temp4 = new_gate_bootstrapping_ciphertext(result.param());
-
-        for (int i = 0; i < a.size(); ++i)
+        for (int i = 0; i < length; ++i)
         {
             bootsCONSTANT(carry, 0, bk_);
-            for (int j = 0; j < a.size(); ++j)
+            for (int j = 0; j < length - i; ++j)
             {
-                bootsAND(temp1, a[i], b[j], bk_);
-                bootsXOR(temp2, &product[i + j], temp1, bk_);
-                bootsCOPY(temp4, &product[i + j], bk_);
-                bootsXOR(&product[i + j], temp2, carry, bk_);
-                bootsAND(temp3, carry, temp2, bk_);
-                bootsAND(temp2, temp1, temp4, bk_);
-                bootsOR(carry, temp2, temp3, bk_);
-            }
-
-            for (int j = a.size(); j < 2 * a.size(); ++j)
-            {
+                /**
+                 * NOTE: b represents product[i+j]
+                 * a = multiplicand[j] & multiplier[i]
+                 * b =  a ^ b ^ carry
+                 * carry = (a & b) | ((a ^ b) & carry)
+                */
+                bootsAND(a, multiplier[i], multiplicand[j], bk_);
+                bootsAND(a_and_b, a, product[i + j], bk_);
+                bootsXOR(a_xor_b, a, product[i + j], bk_);
+                bootsAND(a_xor_b_and_c, a_xor_b, carry, bk_);
+                bootsXOR(product[i + j], a_xor_b, carry, bk_);
+                bootsOR(carry, a_and_b, a_xor_b_and_c, bk_);
             }
         }
-
-        delete_gate_bootstrapping_ciphertext_array(2 * a.size(), product);
-        */
+        delete_gate_bootstrapping_ciphertext(carry);
+        delete_gate_bootstrapping_ciphertext(a);
+        delete_gate_bootstrapping_ciphertext(a_xor_b);
+        delete_gate_bootstrapping_ciphertext(a_and_b);
+        delete_gate_bootstrapping_ciphertext(a_xor_b_and_c);
     }
-    void Evaluator::div(CtxtInteger &result, const CtxtInteger &a, const CtxtInteger &b)
+
+    /**
+     * https://www.cnblogs.com/lfri/p/10047038.html
+     */
+    void Evaluator::div(CtxtInteger &quotient, CtxtInteger &remainder, const CtxtInteger &dividend, const CtxtInteger &divisor)
     {
     }
 }; // namespace tfhello

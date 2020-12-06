@@ -12,7 +12,7 @@ namespace tfhello
     public:
         // little endian
         // most significant bit is right-most bit
-        vector<int> encode(int integer, int bits)
+        vector<int> encode(int64_t integer, size_t bits)
         {
             vector<int> ret(bits);
             for (int i = 0; i < bits; ++i)
@@ -22,7 +22,7 @@ namespace tfhello
             return ret;
         }
 
-        int decode(const vector<int> &data, int bits)
+        int64_t decode(const vector<int> &data, size_t bits)
         {
             int ret = 0;
             for (int i = 0; i < bits; ++i)
